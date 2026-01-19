@@ -25,6 +25,25 @@ app.get('/health', (req, res) => {
     });
 });
 
+// Database status endpoint
+app.get('/api/v1/db-status', (req, res) => {
+    const mongoose = require('mongoose');
+    const dbState = mongoose.connection.readyState;
+    const states = {
+        0: 'disconnected',
+        1: 'connected',
+        2: 'connecting',
+        3: 'disconnecting'
+    };
+
+    res.status(200).json({
+        database: states[dbState] || 'unknown',
+        mongoUri: process.env.MONGO_URI ? 'configured' : 'missing',
+        timestamp: new Date().toISOString()
+    });
+});
+
+
 
 const user = require('./routes/userRoute');
 const product = require('./routes/productRoute');
