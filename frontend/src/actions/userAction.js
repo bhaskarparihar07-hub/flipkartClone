@@ -126,7 +126,7 @@ export const updateProfile = (userData) => async (dispatch) => {
     try {
         dispatch({ type: UPDATE_PROFILE_REQUEST });
 
-        const updatedUser = updateUserProfile({
+        updateUserProfile({
             name: userData.name,
             email: userData.email,
             avatar: userData.avatar

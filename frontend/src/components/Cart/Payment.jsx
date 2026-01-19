@@ -21,7 +21,6 @@ const Payment = () => {
     const [payDisable, setPayDisable] = useState(false);
 
     const { shippingInfo, cartItems } = useSelector((state) => state.cart);
-    const { user } = useSelector((state) => state.user);
     const { error } = useSelector((state) => state.newOrder);
 
     const totalPrice = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
