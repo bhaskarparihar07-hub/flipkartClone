@@ -11,6 +11,7 @@ process.on('uncaughtException', (err) => {
     process.exit(1);
 });
 
+console.log("Starting server... Environment:", process.env.NODE_ENV);
 connectDatabase();
 
 cloudinary.config({
