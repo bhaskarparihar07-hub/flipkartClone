@@ -1,49 +1,51 @@
-import axios from "axios"
-import { ADD_TO_CART, EMPTY_CART, REMOVE_FROM_CART, SAVE_SHIPPING_INFO } from "../constants/cartConstants";
+import { ADD_TO_CART, REMOVE_FROM_CART, SAVE_SHIPPING_INFO, EMPTY_CART } from "../constants/cartConstants";
+import { getProductById } from '../utils/indexedDB';
 
-// add to cart
+// Add to Cart
 export const addItemsToCart = (id, quantity = 1) => async (dispatch, getState) => {
-    const { data } = await axios.get(`/api/v1/product/${id}`);
+    // Get product from IndexedDB instead of API
+    const product = await getProductById(id);
+
+    if (!product) {
+        console.error('Product not found');
+        return;
+    }
 
     dispatch({
         type: ADD_TO_CART,
         payload: {
-            product: data.product._id,
-            name: data.product.name,
-            seller: data.product.brand.name,
-            price: data.product.price,
-            cuttedPrice: data.product.cuttedPrice,
-            image: data.product.images[0].url,
-            stock: data.product.stock,
+            product: product._id,
+            name: product.name,
+            price: product.price,
+            cuttedPrice: product.cuttedPrice,
+            image: product.images[0].url,
+            stock: product.stock,
             quantity,
         },
     });
 
-    localStorage.setItem('cartItems', JSON.stringify(getState().cart.cartItems))
+    localStorage.setItem('cartItems', JSON.stringify(getState().cart.cartItems));
 }
 
-// remove cart item
-export const removeItemsFromCart = (id) => async (dispatch, getState) => {
-
+// Remove from Cart
+export const removeItemsFromCart = (id) => (dispatch, getState) => {
     dispatch({
         type: REMOVE_FROM_CART,
         payload: id,
     });
 
-    localStorage.setItem('cartItems', JSON.stringify(getState().cart.cartItems))
+    localStorage.setItem('cartItems', JSON.stringify(getState().cart.cartItems));
 }
 
-// empty cart
-export const emptyCart = () => async (dispatch, getState) => {
-
+// Empty Cart
+export const emptyCart = () => (dispatch, getState) => {
     dispatch({ type: EMPTY_CART });
 
-    localStorage.setItem('cartItems', JSON.stringify(getState().cart.cartItems))
+    localStorage.setItem('cartItems', JSON.stringify(getState().cart.cartItems));
 }
 
-// save shipping info
-export const saveShippingInfo = (data) => async (dispatch) => {
-
+// Save Shipping Info
+export const saveShippingInfo = (data) => (dispatch) => {
     dispatch({
         type: SAVE_SHIPPING_INFO,
         payload: data,

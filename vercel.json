@@ -1,8 +1,15 @@
 {
-  "rewrites": [
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/build",
+  "framework": "create-react-app",
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/index.js"
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
