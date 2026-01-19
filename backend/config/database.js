@@ -3,18 +3,21 @@ const MONGO_URI = process.env.MONGO_URI;
 
 const connectDatabase = () => {
     if (!MONGO_URI) {
-        console.error("MONGO_URI is not defined");
-        // In a serverless environment, we might want to throw to fail fast, 
-        // but logging is critical first.
+        console.log('MONGO_URI is not defined in environment variables');
+        return;
     }
-    mongoose.connect(MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
+
+    mongoose.connect(MONGO_URI, {
+        useNewUrlParser: true,
+        useUnifiedTopology: true,
+        serverSelectionTimeoutMS: 30000, // Increase to 30 seconds
+        socketTimeoutMS: 45000, // Increase to 45 seconds
+    })
         .then(() => {
             console.log("Mongoose Connected");
         })
         .catch((err) => {
-            console.error("Mongoose Connection Error:", err);
-            // Don't exit in serverless - let the function handle requests even if DB fails
-            // This allows us to see logs and debug the actual issue
+            console.error('MongoDB Connection Error:', err.message);
         });
 }
 
