@@ -24,7 +24,7 @@ const Shipping = () => {
 
     const [address, setAddress] = useState(shippingInfo.address);
     const [city, setCity] = useState(shippingInfo.city);
-    const [country, setCountry] = useState('IN');
+    const [country] = useState('IN');
     const [state, setState] = useState(shippingInfo.state);
     const [pincode, setPincode] = useState(shippingInfo.pincode);
     const [phoneNo, setPhoneNo] = useState(shippingInfo.phoneNo);
@@ -112,7 +112,7 @@ const Shipping = () => {
                                                 defaultValue={country}
                                                 disabled
                                                 label="Country"
-                                                // onChange={(e) => setCountry(e.target.value)}
+                                            // onChange={(e) => setCountry(e.target.value)}
                                             >
                                                 <MenuItem value={'IN'}>India</MenuItem>
                                             </Select>
