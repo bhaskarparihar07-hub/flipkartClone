@@ -518,27 +518,20 @@ const products = [
 // Seed database controller
 exports.seedDatabase = async (req, res) => {
     try {
-        // Check if data already exists
-        const existingProducts = await Product.countDocuments();
-        if (existingProducts > 0) {
-            return res.status(200).json({
-                success: true,
-                message: 'Database already seeded',
-                productsCount: existingProducts
-            });
-        }
-
-        // Create admin user (check if exists first)
-        let adminUser = await User.findOne({ email: 'admin@flipkart.com' });
-        if (!adminUser) {
-            adminUser = await User.create({
-                name: 'Admin User',
-                email: 'admin@flipkart.com',
-                gender: 'male',
-                password: 'admin123456',
-                role: 'admin'
-            });
-        }
+        // Create admin user directly
+        const adminUser = await User.create({
+            name: 'Admin User',
+            email: 'admin@flipkart.com',
+            gender: 'male',
+            password: 'admin123456',
+            role: 'admin'
+        }).catch(err => {
+            // If admin already exists, find it
+            if (err.code === 11000) {
+                return User.findOne({ email: 'admin@flipkart.com' });
+            }
+            throw err;
+        });
 
         // Add user reference to all products
         const productsWithUser = products.map(product => ({
@@ -546,12 +539,19 @@ exports.seedDatabase = async (req, res) => {
             user: adminUser._id
         }));
 
-        // Insert products
-        await Product.insertMany(productsWithUser);
+        // Insert products (will skip duplicates if any)
+        const inserted = await Product.insertMany(productsWithUser, { ordered: false }).catch(err => {
+            // Ignore duplicate key errors
+            if (err.code === 11000) {
+                return { length: 0 };
+            }
+            throw err;
+        });
 
         res.status(200).json({
             success: true,
-            message: `Database seeded successfully with ${products.length} products`,
+            message: `Database seeded successfully`,
+            productsInserted: inserted.length || products.length,
             adminCredentials: {
                 email: 'admin@flipkart.com',
                 password: 'admin123456'
@@ -565,4 +565,5 @@ exports.seedDatabase = async (req, res) => {
         });
     }
 };
+
 
