@@ -13,8 +13,8 @@ const connectDatabase = () => {
         })
         .catch((err) => {
             console.error("Mongoose Connection Error:", err);
-            // Ensure the process exits so Vercel restarts/fails explicitly rather than hanging
-            process.exit(1);
+            // Don't exit in serverless - let the function handle requests even if DB fails
+            // This allows us to see logs and debug the actual issue
         });
 }
 
