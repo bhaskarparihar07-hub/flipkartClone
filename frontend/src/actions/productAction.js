@@ -1,4 +1,3 @@
-import axios from "axios";
 import {
     ALL_PRODUCTS_FAIL,
     ALL_PRODUCTS_REQUEST,
@@ -32,6 +31,15 @@ import {
     SLIDER_PRODUCTS_SUCCESS,
     SLIDER_PRODUCTS_FAIL,
 } from "../constants/productConstants";
+import {
+    getAllProducts,
+    getProductById,
+    getProductsByCategory,
+    searchProducts,
+    addProduct as addProductToDB,
+    updateProduct as updateProductInDB,
+    deleteProduct as deleteProductFromDB
+} from '../utils/indexedDB';
 
 // Get All Products --- Filter/Search/Sort
 export const getProducts =
@@ -39,20 +47,28 @@ export const getProducts =
         try {
             dispatch({ type: ALL_PRODUCTS_REQUEST });
 
-            let url = `/api/v1/products?keyword=${keyword}&price[gte]=${price[0]}&price[lte]=${price[1]}&ratings[gte]=${ratings}&page=${currentPage}`;
-            if (category) {
-                url = `/api/v1/products?keyword=${keyword}&category=${category}&price[gte]=${price[0]}&price[lte]=${price[1]}&ratings[gte]=${ratings}&page=${currentPage}`;
-            }
-            const { data } = await axios.get(url);
+            // Use IndexedDB instead of API
+            let products = await searchProducts(keyword, category, price, ratings);
+
+            // Simple pagination
+            const resultPerPage = 12;
+            const startIndex = (currentPage - 1) * resultPerPage;
+            const endIndex = startIndex + resultPerPage;
+            const paginatedProducts = products.slice(startIndex, endIndex);
 
             dispatch({
                 type: ALL_PRODUCTS_SUCCESS,
-                payload: data,
+                payload: {
+                    products: paginatedProducts,
+                    productsCount: products.length,
+                    resultPerPage,
+                    filteredProductsCount: products.length
+                },
             });
         } catch (error) {
             dispatch({
                 type: ALL_PRODUCTS_FAIL,
-                payload: error.response.data.message,
+                payload: error.message,
             });
         }
     };
@@ -62,16 +78,21 @@ export const getSimilarProducts = (category) => async (dispatch) => {
     try {
         dispatch({ type: ALL_PRODUCTS_REQUEST });
 
-        const { data } = await axios.get(`/api/v1/products?category=${category}`);
+        const products = await getProductsByCategory(category);
 
         dispatch({
             type: ALL_PRODUCTS_SUCCESS,
-            payload: data,
+            payload: {
+                products,
+                productsCount: products.length,
+                resultPerPage: 12,
+                filteredProductsCount: products.length
+            },
         });
     } catch (error) {
         dispatch({
             type: ALL_PRODUCTS_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 };
@@ -81,16 +102,52 @@ export const getProductDetails = (id) => async (dispatch) => {
     try {
         dispatch({ type: PRODUCT_DETAILS_REQUEST });
 
-        const { data } = await axios.get(`/api/v1/product/${id}`);
+        let product = await getProductById(id);
+
+        // If product not found, create a placeholder "Out of Stock" product
+        if (!product) {
+            // Try to extract category from URL or use default
+            const urlParams = new URLSearchParams(window.location.search);
+            const category = urlParams.get('category') || 'Electronics';
+
+            product = {
+                _id: id,
+                name: "Product Currently Unavailable",
+                description: "This product is currently out of stock or unavailable. Please check back later or browse similar products.",
+                highlights: ["Currently unavailable", "Check back soon"],
+                specifications: [
+                    { title: "Status", description: "Out of Stock" }
+                ],
+                price: 0,
+                cuttedPrice: 0,
+                images: [{
+                    public_id: "placeholder",
+                    url: "https://via.placeholder.com/400x400?text=Out+of+Stock"
+                }],
+                brand: {
+                    name: "N/A",
+                    logo: {
+                        public_id: "placeholder",
+                        url: "https://via.placeholder.com/100x50?text=Brand"
+                    }
+                },
+                category: category,
+                stock: 0, // Out of stock
+                warranty: 0,
+                ratings: 0,
+                numOfReviews: 0,
+                reviews: []
+            };
+        }
 
         dispatch({
             type: PRODUCT_DETAILS_SUCCESS,
-            payload: data.product,
+            payload: product,
         });
     } catch (error) {
         dispatch({
             type: PRODUCT_DETAILS_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 };
@@ -99,17 +156,41 @@ export const getProductDetails = (id) => async (dispatch) => {
 export const newReview = (reviewData) => async (dispatch) => {
     try {
         dispatch({ type: NEW_REVIEW_REQUEST });
-        const config = { header: { "Content-Type": "application/json" } }
-        const { data } = await axios.put("/api/v1/review", reviewData, config);
+
+        // Get product from IndexedDB
+        const product = await getProductById(reviewData.productId);
+
+        if (!product) {
+            throw new Error('Product not found');
+        }
+
+        // Add review to product
+        const newReview = {
+            user: reviewData.userId || 'user-' + Date.now(),
+            name: reviewData.name || 'Anonymous',
+            rating: reviewData.rating,
+            comment: reviewData.comment
+        };
+
+        product.reviews = product.reviews || [];
+        product.reviews.push(newReview);
+        product.numOfReviews = product.reviews.length;
+
+        // Recalculate average rating
+        const totalRating = product.reviews.reduce((sum, review) => sum + review.rating, 0);
+        product.ratings = totalRating / product.reviews.length;
+
+        // Update in IndexedDB
+        await updateProductInDB(product);
 
         dispatch({
             type: NEW_REVIEW_SUCCESS,
-            payload: data.success,
+            payload: true,
         });
     } catch (error) {
         dispatch({
             type: NEW_REVIEW_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 }
@@ -119,16 +200,16 @@ export const getSliderProducts = () => async (dispatch) => {
     try {
         dispatch({ type: SLIDER_PRODUCTS_REQUEST });
 
-        const { data } = await axios.get('/api/v1/products/all');
+        const products = await getAllProducts();
 
         dispatch({
             type: SLIDER_PRODUCTS_SUCCESS,
-            payload: data.products,
+            payload: products,
         });
     } catch (error) {
         dispatch({
             type: SLIDER_PRODUCTS_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 };
@@ -138,16 +219,16 @@ export const getAdminProducts = () => async (dispatch) => {
     try {
         dispatch({ type: ADMIN_PRODUCTS_REQUEST });
 
-        const { data } = await axios.get('/api/v1/admin/products');
+        const products = await getAllProducts();
 
         dispatch({
             type: ADMIN_PRODUCTS_SUCCESS,
-            payload: data.products,
+            payload: products,
         });
     } catch (error) {
         dispatch({
             type: ADMIN_PRODUCTS_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 };
@@ -156,17 +237,29 @@ export const getAdminProducts = () => async (dispatch) => {
 export const createProduct = (productData) => async (dispatch) => {
     try {
         dispatch({ type: NEW_PRODUCT_REQUEST });
-        const config = { header: { "Content-Type": "application/json" } }
-        const { data } = await axios.post("/api/v1/admin/product/new", productData, config);
+
+        // Generate new product with ID
+        const newProduct = {
+            ...productData,
+            _id: 'product-' + Date.now(),
+            ratings: 0,
+            numOfReviews: 0,
+            reviews: []
+        };
+
+        await addProductToDB(newProduct);
 
         dispatch({
             type: NEW_PRODUCT_SUCCESS,
-            payload: data,
+            payload: {
+                success: true,
+                product: newProduct
+            },
         });
     } catch (error) {
         dispatch({
             type: NEW_PRODUCT_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 }
@@ -175,17 +268,27 @@ export const createProduct = (productData) => async (dispatch) => {
 export const updateProduct = (id, productData) => async (dispatch) => {
     try {
         dispatch({ type: UPDATE_PRODUCT_REQUEST });
-        const config = { header: { "Content-Type": "application/json" } }
-        const { data } = await axios.put(`/api/v1/admin/product/${id}`, productData, config);
+
+        const product = await getProductById(id);
+        if (!product) {
+            throw new Error('Product not found');
+        }
+
+        const updatedProduct = {
+            ...product,
+            ...productData
+        };
+
+        await updateProductInDB(updatedProduct);
 
         dispatch({
             type: UPDATE_PRODUCT_SUCCESS,
-            payload: data.success,
+            payload: true,
         });
     } catch (error) {
         dispatch({
             type: UPDATE_PRODUCT_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 }
@@ -194,16 +297,17 @@ export const updateProduct = (id, productData) => async (dispatch) => {
 export const deleteProduct = (id) => async (dispatch) => {
     try {
         dispatch({ type: DELETE_PRODUCT_REQUEST });
-        const { data } = await axios.delete(`/api/v1/admin/product/${id}`);
+
+        await deleteProductFromDB(id);
 
         dispatch({
             type: DELETE_PRODUCT_SUCCESS,
-            payload: data.success,
+            payload: true,
         });
     } catch (error) {
         dispatch({
             type: DELETE_PRODUCT_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 }
@@ -212,16 +316,21 @@ export const deleteProduct = (id) => async (dispatch) => {
 export const getAllReviews = (id) => async (dispatch) => {
     try {
         dispatch({ type: ALL_REVIEWS_REQUEST });
-        const { data } = await axios.get(`/api/v1/admin/reviews?id=${id}`);
+
+        const product = await getProductById(id);
+
+        if (!product) {
+            throw new Error('Product not found');
+        }
 
         dispatch({
             type: ALL_REVIEWS_SUCCESS,
-            payload: data.reviews,
+            payload: product.reviews || [],
         });
     } catch (error) {
         dispatch({
             type: ALL_REVIEWS_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 }
@@ -230,16 +339,35 @@ export const getAllReviews = (id) => async (dispatch) => {
 export const deleteReview = (reviewId, productId) => async (dispatch) => {
     try {
         dispatch({ type: DELETE_REVIEW_REQUEST });
-        const { data } = await axios.delete(`/api/v1/admin/reviews?id=${reviewId}&productId=${productId}`);
+
+        const product = await getProductById(productId);
+
+        if (!product) {
+            throw new Error('Product not found');
+        }
+
+        // Remove review
+        product.reviews = product.reviews.filter((_, index) => index !== parseInt(reviewId));
+        product.numOfReviews = product.reviews.length;
+
+        // Recalculate rating
+        if (product.reviews.length > 0) {
+            const totalRating = product.reviews.reduce((sum, review) => sum + review.rating, 0);
+            product.ratings = totalRating / product.reviews.length;
+        } else {
+            product.ratings = 0;
+        }
+
+        await updateProductInDB(product);
 
         dispatch({
             type: DELETE_REVIEW_SUCCESS,
-            payload: data.success,
+            payload: true,
         });
     } catch (error) {
         dispatch({
             type: DELETE_REVIEW_FAIL,
-            payload: error.response.data.message,
+            payload: error.message,
         });
     }
 }
